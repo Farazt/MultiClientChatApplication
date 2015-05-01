@@ -1,0 +1,262 @@
+
+//Client Application programming Interface
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Net.Sockets;
+using System.Security.Permissions;
+using System.Text;
+using System.Threading;
+using System.Configuration;
+
+
+namespace Client
+{
+    public class client
+    {
+        public string selection;
+        Clients _clients = new Clients();
+
+        public static int Counter = 0;
+        TcpClient tcp = new TcpClient();
+
+
+        public void Setclient(string select, string mesg)
+        {
+            //counter = counter + 1;
+            this.selection = select;
+
+            if (selection == "1")
+            {
+                _clients.SenderClientId="True";
+                _clients.MessageBody=mesg;
+                
+                _clients.writingthread();
+
+            }
+
+            else if (selection == "2")
+            {
+                _clients.Broadcast="false";
+                
+                _clients.MessageBody=mesg;
+                
+                _clients.writingthread();
+                
+                
+            }
+            else
+            {
+                Console.WriteLine("Wrong selection");
+            }
+
+       
+        
+        
+        }
+
+        public void Receivingthread()
+        {
+
+            while (true)
+            {
+                NetworkStream clientstream = tcp.GetStream();
+
+                byte[] receivingbytes = new byte[100];
+                clientstream.Read(receivingbytes, 0, receivingbytes.Length);
+                string receivedvalue = System.Text.Encoding.ASCII.GetString(receivingbytes);
+                Console.WriteLine(receivedvalue);
+            }
+        }
+        
+
+
+        public void makeconnection()
+        {
+            _clients.set_tcp(tcp);
+            _clients.socket_client();
+
+        }
+
+    }
+
+    interface IMessage
+    {
+        
+        string SenderClientId
+        {
+            get;
+            set;
+        }
+
+        string ReceiverClientId
+        {
+            get;
+            set;
+        }
+
+     
+        string MessageBody
+        {
+            get;
+            set;
+        }
+
+       
+        string Broadcast
+        {
+            get;
+            set;
+        }
+    }
+
+
+
+
+    public class Clients:IMessage
+    {
+        private string _senderId;
+        private string _receiverId;
+        private string _messageContent;
+        private string _broadcast;
+        public TcpClient Tcpdup=new TcpClient();
+
+        public void set_tcp(TcpClient tcp)
+        {
+            this.Tcpdup = tcp;
+
+        }
+        // public static List<string> connectedUser = new List<string>();
+        public Clients()
+        {
+
+        }
+
+        public void socket_client()
+        {
+            int portvalue=0;
+            try
+            {
+                 portvalue =int.Parse(ConfigurationManager.AppSettings["Port3"]);
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+                }
+            //int port=Convert.ToInt32(portvalue);
+            Tcpdup.Connect("20.200.20.21", portvalue);
+
+            NetworkStream clientstream = Tcpdup.GetStream();
+            byte[] id = new byte[4];
+            clientstream.Read(id, 0, id.Length);
+            string stid = System.Text.Encoding.ASCII.GetString(id);
+            this._senderId=stid;//id received by client from server
+
+            Console.WriteLine("User: " + this.SenderClientId);//Client connected
+
+        }
+//One way to set the getter and setters is to individually make the functions and than call them accordingly 
+     /*  public void set_senderid(string id)
+        {
+            this._senderId = id;
+
+        }
+
+        public string get_senderId()
+        {
+            return this._senderId;
+        }
+
+
+        public void set_receiverID(string id)
+        {
+            this._receiverId = id;
+        }
+
+        public string get_receiverID()
+        {
+            return this._receiverId;
+        }
+
+        public void set_messagecontent(string msg)
+        {
+            this._messageContent = msg;
+
+        }
+
+        public string get_messagecontent()
+        {
+            return this._messageContent;
+        }
+
+        public void set_broadcast(string broad)
+        {
+            _broadcast = broad;
+
+        }
+
+        public string get_broadcast()
+        {
+            return this._broadcast;
+        }*/
+
+       public void writingthread()
+        {
+            NetworkStream writingsocket = Tcpdup.GetStream();
+            byte[] writingdata = new byte[40];
+            writingdata = Encoding.ASCII.GetBytes(this.Broadcast);
+            writingsocket.Write(writingdata, 0, writingdata.Length);
+            writingsocket.Flush();
+            writingdata = Encoding.ASCII.GetBytes(this.MessageBody);
+          
+            writingsocket.Write(writingdata, 0, writingdata.Length);
+            writingsocket.Flush();
+            byte[] receiverbyte = new byte[1];
+            
+            if (this.Broadcast == "false")
+            {
+                Console.WriteLine("Select from connected Users:");
+                string usertoconnect=Console.ReadLine();
+                this._senderId = usertoconnect;
+                
+                 receiverbyte = Encoding.ASCII.GetBytes(this.SenderClientId);
+                writingsocket.Write(receiverbyte, 0, receiverbyte.Length);
+                writingsocket.Flush();
+            }
+
+
+    }
+//IMessage Interface Implementation:
+   public string SenderClientId
+       {
+           get
+           {
+               return SenderClientId;
+           }
+           set
+           {
+                SenderClientId=_senderId;
+           }
+       }
+
+       public string ReceiverClientId
+       {
+           get { return ReceiverClientId; }
+           set { ReceiverClientId = _receiverId; }
+       }
+
+       public string MessageBody
+       {
+           get { return _messageContent; }
+           set { MessageBody=_messageContent ; }
+       }
+
+       public string Broadcast
+       {
+           get { return Broadcast; }
+           set {  Broadcast=_broadcast; }
+       }
+    }
+}
