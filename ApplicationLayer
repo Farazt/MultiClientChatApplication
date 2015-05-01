@@ -1,0 +1,42 @@
+using System;
+using System.Collections;
+using System.ComponentModel;
+using System.Linq;
+using System.Text;
+using System.Net.Sockets;
+using System.Net;
+using System.Threading;
+using Client;
+
+
+namespace Application
+{
+    class Program
+    {
+        private static void Main(string[] args)
+        {
+            Console.WriteLine("Hello You have entered into the client server chat!!");
+
+            client user=new client();
+            
+            user.makeconnection();
+            Thread receiver=new Thread(user.Receivingthread);
+            receiver.Start();
+           // user.idset();
+
+            do
+            {
+                Console.WriteLine("Message:");
+                string message = Console.ReadLine();
+                Console.WriteLine("1:broadcast" + "  " + "2:client Chat");
+                string selection = Console.ReadLine();
+                user.Setclient(selection, message);
+            } while (true);
+
+
+
+
+
+        }
+    }
+}
