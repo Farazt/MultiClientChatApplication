@@ -1,0 +1,282 @@
+//MultiThreaded Chat Server
+
+
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel.Design.Serialization;
+using System.Data.SqlClient;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading;
+using Server;
+using System.Configuration;
+
+namespace Server
+{
+    class Program
+    {
+        private static Hashtable clientlist = new Hashtable();
+        private static int _counter = 0;
+
+
+
+        static void Main(string[] args)
+        {
+            Socketstart();
+        }
+
+
+        public static void Socketstart()
+        {
+            _counter = 0;
+            string ports = ConfigurationManager.AppSettings["Port3"];
+            int port = Convert.ToInt16(ports);
+            TcpListener listner = new TcpListener(IPAddress.Any, port);
+            listner.Start();
+
+            Console.WriteLine("Server Started");
+            TcpClient clientsocket = new TcpClient();
+
+
+            while (true)
+            {
+                try
+                {
+
+                    clientsocket = listner.AcceptTcpClient(); // it blocks the statement until it accepts the client
+                }
+                catch (InvalidOperationException)
+                {
+                    Console.WriteLine("Inavlid Operation Exception");
+                }
+
+                NetworkStream ns = clientsocket.GetStream();
+                _counter = _counter + 1;
+                Console.WriteLine("Client:" + _counter + " " + "Connected");
+                byte[] senderID = new byte[1000];
+                senderID = System.Text.Encoding.ASCII.GetBytes(_counter.ToString());
+                //Sender ID allotment
+                try
+                {
+                    ns.Write(senderID, 0, senderID.Length); //senderId assigned
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+
+                }
+               
+                try
+                {
+                    clientlist.Add(_counter, clientsocket);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
+
+
+
+                clienthandler hcl = new clienthandler();
+                hcl.Startclient(clientsocket, _counter.ToString(), clientlist);
+
+            }
+
+        }
+
+        public static void broadcast(Hashtable clist, string clnt, string msg)
+        {
+            foreach (DictionaryEntry item in clist)
+            {
+                if (item.Key.ToString() != clnt)
+                {
+                    TcpClient broadcastSocket;
+
+                    broadcastSocket = (TcpClient)item.Value;
+                    NetworkStream broadcastStream = broadcastSocket.GetStream();
+                    byte[] broadcastbytes = null;
+                    broadcastbytes = Encoding.ASCII.GetBytes(clnt + " " + "says:" + msg);
+                    try
+                    {
+                        broadcastStream.Write(broadcastbytes, 0, broadcastbytes.Length);
+                    }
+                    catch (Exception ex)
+                    {
+                        broadcastStream.Dispose();
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+public class clienthandler
+{
+
+    private Hashtable clientlist = new Hashtable();
+    private TcpClient handleClient;
+    private string senderid;
+    //private string receiverid;
+    //private bool broadcast;
+    Queue que = new Queue();
+    Queue senderidQue = new Queue();
+    private static int counter = 0;
+
+    public void Startclient(TcpClient clienthandle, string cltNo, Hashtable clist)
+    {
+        counter = counter + 1;
+        this.clientlist = clist;
+        this.senderid = cltNo;
+        this.handleClient = clienthandle;
+        // this.broadcast = selection;
+        Thread cthread = new Thread(chat);
+        cthread.Start();
+    }
+
+    public void chat()
+    {
+        while (true)
+        {
+
+               NetworkStream network = this.handleClient.GetStream();
+               string _indication = null;
+                byte[] indication = new byte[5];
+                try
+                {
+                    network.Read(indication, 0, indication.Length);
+                    _indication = System.Text.Encoding.ASCII.GetString(indication);
+                }
+                catch(ObjectDisposedException)
+                {
+                 network.Dispose();
+                }
+              bool selector = Convert.ToBoolean(_indication);
+              Console.WriteLine("BroadcastDecision:" + " " + selector);
+
+               /* int buffersize;
+                byte[] buffer=new byte[32];
+                network.Read(buffer, 0, buffer.Length);
+                string conversion_string = Encoding.ASCII.GetString(buffer);
+                buffersize = Convert.ToInt32(conversion_string);
+                */
+                byte[] rbuffer = new byte[5];
+                string rData=null;
+                try
+                {   network.Read(rbuffer, 0, rbuffer.Length);
+                    rData = System.Text.Encoding.ASCII.GetString(rbuffer);
+                }
+                catch (ObjectDisposedException)
+                {
+                network.Dispose();
+                }
+
+                que.Enqueue(rData);
+                senderidQue.Enqueue(this.senderid);
+
+                Console.WriteLine("Receiving Message:" + " " + rData);
+               
+       if (selector.Equals(true))
+         {
+                    if (counter > 1)
+                    {
+                        Program.broadcast(this.clientlist, (string)senderidQue.Dequeue(), (string)que.Dequeue());
+
+                    }
+                    else
+                    {   byte[] noconnection=new byte[26];
+                        noconnection=Encoding.ASCII.GetBytes("No User Available to connect with");
+                        try
+                        {
+                            network.Write(noconnection, 0, noconnection.Length);
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                           network.Dispose();
+                        }
+                    }
+         }
+         else if (selector.Equals(false))
+           {
+                    
+                        foreach (object item in clientlist.Keys)
+                        {
+                            NetworkStream broadcastingstream = this.handleClient.GetStream();
+                            byte[] id = new byte[18];
+                            id = System.Text.Encoding.ASCII.GetBytes("Client:" + item + "  " + "Connected");
+
+                            try
+                            {
+                                broadcastingstream.Write(id, 0, id.Length);
+                            }
+                            catch (ObjectDisposedException)
+                            {
+                                broadcastingstream.Dispose();
+                            
+                            }
+
+
+
+                        }
+
+                    
+                    Console.WriteLine("Into client chat");
+                    string receiver_id = null;
+                    byte[] receiver = new byte[1];
+                    try
+                    {
+                        network.Read(receiver, 0, receiver.Length);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        network.Dispose();
+                    }
+                    receiver_id = System.Text.Encoding.ASCII.GetString(receiver);//this would tell to which client you want to connect
+                    Console.WriteLine("Receiver ID:" + receiver_id);
+
+                    foreach (DictionaryEntry item in clientlist)
+                    {
+                        //Console.WriteLine("IDS here:" + item.Key.ToString());
+
+                        if (item.Key.ToString() == receiver_id)
+                        {
+                            TcpClient receiversocket;
+
+                            byte[] _datatospecClient = new byte[1000];
+                            _datatospecClient = System.Text.Encoding.ASCII.GetBytes(this.senderid + "." + "says:" + " " + (string)que.Dequeue());
+                           // Console.WriteLine("Inhere");
+                            receiversocket = (TcpClient)item.Value;
+                            NetworkStream clientstream = receiversocket.GetStream();
+                            try
+                            {
+                                clientstream.Write(_datatospecClient, 0, _datatospecClient.Length);
+                            }
+                            catch (ObjectDisposedException)
+                            {
+                                clientstream.Dispose();
+                            }
+                        }
+
+                    }
+           }
+
+            
+            
+        
+
+
+        }
+
+
+    }
+
+
+}
